@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Expense Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #f5f3ee;
+  --surface:  #ffffff;
+  --border:   #e2ddd5;
+  --text:     #1a1714;
+  --muted:    #8c8680;
+  --accent:   #1a1714;
+  --debit:    #d64c2f;
+  --credit:   #2e7d5e;
+  --yellow:   #f5c842;
+  --mono:     'Space Mono', monospace;
+  --sans:     'Outfit', sans-serif;
+  --r:        10px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--sans); background: var(--bg); color: var(--text); min-height: 100vh; }
+
+/* TOPBAR */
+.topbar {
+  background: var(--text); color: var(--bg);
+  padding: 0 32px; height: 54px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.logo { font-family: var(--mono); font-size: 0.88rem; font-weight: 700; letter-spacing: 0.05em; }
+.logo span { color: var(--yellow); }
+.api-status { font-family: var(--mono); font-size: 0.65rem; display: flex; align-items: center; gap: 6px; color: #888; }
+.api-dot { width: 7px; height: 7px; border-radius: 50%; background: #555; transition: background 0.3s; }
+.api-dot.ok  { background: var(--credit); }
+.api-dot.err { background: var(--debit); }
+
+/* LAYOUT */
+.shell { max-width: 1160px; margin: 0 auto; padding: 28px 20px 80px; }
+
+/* STATS */
+.stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin-bottom: 24px; }
+@media(max-width:600px) { .stats { grid-template-columns: 1fr; } }
+.stat-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 18px 20px;
+  position: relative; overflow: hidden;
+}
+.stat-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; }
+.stat-card.all::before    { background: var(--yellow); }
+.stat-card.debit::before  { background: var(--debit); }
+.stat-card.credit::before { background: var(--credit); }
+.stat-label { font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.stat-value { font-family: var(--mono); font-size: 1.5rem; font-weight: 700; }
+.stat-value.d { color: var(--debit); }
+.stat-value.c { color: var(--credit); }
+.stat-sub { font-size: 0.72rem; color: var(--muted); margin-top: 3px; }
+
+/* GRID */
+.grid { display: grid; grid-template-columns: 340px 1fr; gap: 20px; }
+@media(max-width:800px) { .grid { grid-template-columns: 1fr; } }
+
+/* CARD */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 22px; height: fit-content; }
+.card-head {
+  font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 18px;
+  display: flex; align-items: center; gap: 8px;
+}
+.card-head::after { content:''; flex:1; height:1px; background: var(--border); }
+
+/* FORM */
+.fr { margin-bottom: 14px; }
+label { display:block; font-size:0.73rem; font-weight:600; color:var(--muted); margin-bottom:5px; letter-spacing:0.02em; }
+input, select {
+  width: 100%; background: var(--bg); border: 1.5px solid var(--border);
+  border-radius: 7px; color: var(--text); font-family: var(--sans);
+  font-size: 0.9rem; padding: 10px 13px; outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s; appearance: none;
+}
+input:focus, select:focus { border-color: var(--text); box-shadow: 0 0 0 3px rgba(26,23,20,0.07); }
+input.inv, select.inv { border-color: var(--debit) !important; }
+.err { font-size: 0.68rem; color: var(--debit); margin-top: 3px; display:none; }
+.err.on { display: block; }
+
+/* CAT TABS */
+.cat-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+.cat-tab {
+  padding: 10px; border: 1.5px solid var(--border); border-radius: 7px;
+  background: var(--bg); font-family: var(--sans); font-size: 0.88rem; font-weight: 600;
+  cursor: pointer; text-align: center; transition: all 0.15s; color: var(--muted);
+}
+.cat-tab:hover { border-color: var(--text); color: var(--text); }
+.cat-tab.sel-d { background: var(--debit);  border-color: var(--debit);  color: #fff; }
+.cat-tab.sel-c { background: var(--credit); border-color: var(--credit); color: #fff; }
+
+/* SUBMIT */
+.submit-btn {
+  width: 100%; padding: 13px; background: var(--text); color: var(--bg);
+  border: none; border-radius: 8px; font-family: var(--sans);
+  font-size: 0.92rem; font-weight: 700; cursor: pointer;
+  position: relative; transition: opacity 0.15s, transform 0.1s;
+  letter-spacing: 0.02em;
+}
+.submit-btn:hover:not(:disabled) { opacity: 0.87; transform: translateY(-1px); }
+.submit-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+.sp {
+  display:none; width:14px; height:14px;
+  border: 2px solid var(--bg); border-top-color: transparent;
+  border-radius: 50%; animation: spin 0.55s linear infinite;
+  position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+}
+.submit-btn.ld .sp { display: block; }
+@keyframes spin { to { transform: translateY(-50%) rotate(360deg); } }
+
+/* CONTROLS */
+.controls { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+.ctrl-select {
+  flex: 1; min-width: 140px; background: var(--bg); border: 1.5px solid var(--border);
+  border-radius: 7px; color: var(--text); font-family: var(--sans);
+  font-size: 0.85rem; padding: 9px 12px; outline: none; cursor: pointer;
+  transition: border-color 0.15s; appearance: none;
+}
+.ctrl-select:focus { border-color: var(--text); }
+.sort-btn, .ref-btn {
+  background: var(--bg); border: 1.5px solid var(--border); border-radius: 7px;
+  color: var(--muted); font-family: var(--mono); font-size: 0.7rem;
+  padding: 9px 13px; cursor: pointer; transition: all 0.15s; white-space: nowrap;
+}
+.sort-btn:hover, .ref-btn:hover, .sort-btn.act { border-color: var(--text); color: var(--text); }
+.ref-btn.spin { animation: spin2 0.6s linear infinite; }
+@keyframes spin2 { to { transform: rotate(360deg); } }
+
+/* VISIBLE TOTAL */
+.vis-total {
+  display: flex; justify-content: space-between; align-items: center;
+  background: var(--text); color: var(--bg); border-radius: 8px;
+  padding: 13px 16px; margin-bottom: 14px;
+}
+.vt-label { font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.55; }
+.vt-right { text-align: right; }
+.vt-amount { font-family: var(--mono); font-size: 1.3rem; font-weight: 700; color: var(--yellow); }
+.vt-count  { font-family: var(--mono); font-size: 0.62rem; opacity: 0.45; margin-top: 2px; }
+
+/* TABLE */
+.tw { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+thead th {
+  font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted); padding: 8px 12px;
+  text-align: left; border-bottom: 1px solid var(--border);
+}
+tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: var(--bg); }
+tbody tr.new { animation: rowIn 0.28s ease; }
+@keyframes rowIn { from { opacity:0; transform:translateX(-6px); } to { opacity:1; transform:translateX(0); } }
+td { padding: 11px 12px; vertical-align: middle; }
+.td-date { font-family:var(--mono); font-size:0.73rem; color:var(--muted); white-space:nowrap; }
+.td-desc { font-size:0.87rem; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.td-amt  { font-family:var(--mono); font-weight:700; font-size:0.88rem; white-space:nowrap; }
+.td-amt.d { color: var(--debit); }
+.td-amt.c { color: var(--credit); }
+.badge {
+  display:inline-flex; align-items:center; gap:5px;
+  font-size:0.7rem; font-weight:600; padding:3px 9px;
+  border-radius:20px; white-space:nowrap;
+}
+.badge.d { background:rgba(214,76,47,0.1); color:var(--debit); }
+.badge.c { background:rgba(46,125,94,0.1); color:var(--credit); }
+.badge::before { content:'●'; font-size:0.45rem; }
+
+/* EMPTY / SKELETON */
+.empty { text-align:center; padding:44px 20px; color:var(--muted); font-family:var(--mono); font-size:0.78rem; }
+.empty-icon { font-size:2.2rem; margin-bottom:8px; }
+.sk td div {
+  height:12px; border-radius:4px;
+  background: linear-gradient(90deg, var(--border) 25%, #ede9e1 50%, var(--border) 75%);
+  background-size: 200% 100%; animation: shim 1.1s infinite;
+}
+@keyframes shim { to { background-position: -200% 0; } }
+
+/* TOAST */
+#toast {
+  position:fixed; bottom:24px; left:50%;
+  transform: translateX(-50%) translateY(60px);
+  background: var(--text); color: var(--bg);
+  font-family: var(--mono); font-size: 0.77rem;
+  padding: 10px 20px; border-radius: 8px;
+  transition: transform 0.22s cubic-bezier(.22,1,.36,1);
+  z-index: 999; white-space:nowrap; pointer-events:none;
+}
+#toast.on  { transform: translateX(-50%) translateY(0); }
+#toast.ok  { background: var(--credit); color:#fff; }
+#toast.bad { background: var(--debit);  color:#fff; }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo">finance<span>.</span>track</div>
+  <div class="api-status">
+    <div class="api-dot" id="api-dot"></div>
+    <span id="api-txt">connecting…</span>
+  </div>
+</div>
+
+<!-- SHELL -->
+<div class="shell">
+
+  <!-- STATS -->
+  <div class="stats">
+    <div class="stat-card all">
+      <div class="stat-label">Visible Total</div>
+      <div class="stat-value" id="s-total">₹0.00</div>
+      <div class="stat-sub"  id="s-count">0 entries</div>
+    </div>
+    <div class="stat-card debit">
+      <div class="stat-label">Total Debits</div>
+      <div class="stat-value d" id="s-debit">₹0.00</div>
+      <div class="stat-sub"    id="s-dc">0 entries</div>
+    </div>
+    <div class="stat-card credit">
+      <div class="stat-label">Total Credits</div>
+      <div class="stat-value c" id="s-credit">₹0.00</div>
+      <div class="stat-sub"    id="s-cc">0 entries</div>
+    </div>
+  </div>
+
+  <!-- GRID -->
+  <div class="grid">
+
+    <!-- FORM -->
+    <aside>
+      <div class="card">
+        <div class="card-head">Add Expense</div>
+
+        <div class="fr">
+          <label>Category</label>
+          <div class="cat-tabs">
+            <button class="cat-tab" id="tb-d" onclick="selCat('Debit')">Debit</button>
+            <button class="cat-tab" id="tb-c" onclick="selCat('Credit')">Credit</button>
+          </div>
+          <div class="err" id="e-cat">Select a category</div>
+        </div>
+
+        <div class="fr">
+          <label>Amount (₹)</label>
+          <input type="number" id="f-amount" placeholder="0.00" min="0.01" step="0.01"
+                 oninput="clrErr('f-amount','e-amt')">
+          <div class="err" id="e-amt">Enter a valid positive amount</div>
+        </div>
+
+        <div class="fr">
+          <label>Description</label>
+          <input type="text" id="f-desc" placeholder="What was this for?">
+        </div>
+
+        <div class="fr">
+          <label>Date</label>
+          <input type="date" id="f-date" oninput="clrErr('f-date','e-date')">
+          <div class="err" id="e-date">Select a date</div>
+        </div>
+
+        <button class="submit-btn" id="sub-btn" onclick="submitExpense()">
+          Add Expense
+          <span class="sp"></span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- TABLE PANEL -->
+    <main>
+      <div class="card">
+        <div class="card-head">Expense Log</div>
+
+        <!-- Controls -->
+        <div class="controls">
+          <select class="ctrl-select" id="flt-cat" onchange="onFilter()">
+            <option value="">All categories</option>
+            <option value="Debit">Debit</option>
+            <option value="Credit">Credit</option>
+          </select>
+          <button class="sort-btn act" id="sort-btn" onclick="toggleSort()">↓ Newest</button>
+          <button class="ref-btn" id="ref-btn" onclick="loadAll()" title="Refresh">⟳</button>
+        </div>
+
+        <!-- Visible total -->
+        <div class="vis-total">
+          <div class="vt-label">Visible Total</div>
+          <div class="vt-right">
+            <div class="vt-amount" id="vt-amt">₹0.00</div>
+            <div class="vt-count"  id="vt-cnt">0 entries</div>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="tw">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Category</th>
+                <th>Description</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ══════════════════════════════════════
+   CONFIG
+══════════════════════════════════════ */
+const BASE = 'https://financeapp-production-fd54.up.railway.app/api/v1';
+
+const API = {
+  getAll:      ()       => `${BASE}/get_Expense`,
+  create:      ()       => `${BASE}/create_Expense`,
+  byCat:       (cat)    => `${BASE}/get_by_category/${encodeURIComponent(cat)}`,
+  byDate:      (cat, s) => `${BASE}/expenses_by_date?category=${encodeURIComponent(cat)}&sort=sort%3D${s}`
+};
+
+/* ══════════════════════════════════════
+   STATE
+══════════════════════════════════════ */
+let all       = [];       // current dataset from API
+let visible   = [];       // after client sort
+let selCatVal = '';       // form: selected category
+let fltCat    = '';       // table filter
+let sortDir   = 'desc';   // desc = newest first
+let busy      = false;    // submit in-flight
+let loading   = false;    // fetch in-flight
+
+/* ══════════════════════════════════════
+   BOOT
+══════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('f-date').value = today();
+  loadAll();
+});
+
+/* ══════════════════════════════════════
+   FETCH HELPERS
+══════════════════════════════════════ */
+async function apiFetch(url, opts = {}) {
+  const res = await fetch(url, {
+    ...opts,
+    signal: AbortSignal.timeout(12000),
+    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) }
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`HTTP ${res.status}${body ? ': ' + body : ''}`);
+  }
+  return res.json();
+}
+
+function normalize(data) {
+  // API may return array or { data: [...] } or { expenses: [...] }
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.expenses)) return data.expenses;
+  return [];
+}
+
+/* ══════════════════════════════════════
+   LOAD — endpoint selection logic
+   ┌─────────────────────────────────┐
+   │ No filter  → GET /get_Expense   │
+   │ Filter cat → GET /get_by_cat    │
+   │ + sort     → GET /expenses_by_date│
+   └─────────────────────────────────┘
+══════════════════════════════════════ */
+async function loadAll() {
+  if (loading) return;
+  loading = true;
+  setStatus('loading');
+  setRefSpin(true);
+  skeleton();
+
+  try {
+    const data = await apiFetch(API.getAll());
+    all = normalize(data);
+    setStatus('ok');
+    apply();
+    updateGlobalStats();
+  } catch (e) {
+    setStatus('err');
+    toast('Failed to load: ' + e.message, 'bad');
+    empty('Could not reach the API. Check your connection.');
+  } finally {
+    loading = false;
+    setRefSpin(false);
+  }
+}
+
+async function loadByCat(cat) {
+  if (loading) return;
+  loading = true;
+  setRefSpin(true);
+  skeleton();
+
+  try {
+    const data = await apiFetch(API.byCat(cat));
+    all = normalize(data);
+    apply();
+    updateGlobalStats();
+  } catch (e) {
+    toast('Filter failed: ' + e.message, 'bad');
+    empty('Could not filter by category.');
+  } finally {
+    loading = false;
+    setRefSpin(false);
+  }
+}
+
+async function loadByDate(cat, sortKey) {
+  if (loading) return;
+  loading = true;
+  setRefSpin(true);
+  skeleton();
+
+  try {
+    const data = await apiFetch(API.byDate(cat, sortKey));
+    all = normalize(data);
+    apply();
+    updateGlobalStats();
+  } catch (e) {
+    toast('Sort fetch failed — using local sort', 'bad');
+    // Graceful degradation: sort in-memory
+    apply();
+  } finally {
+    loading = false;
+    setRefSpin(false);
+  }
+}
+
+/* ══════════════════════════════════════
+   SUBMIT
+══════════════════════════════════════ */
+async function submitExpense() {
+  if (busy) return;
+
+  // ── VALIDATE ──
+  let ok = true;
+
+  if (!selCatVal) {
+    show('e-cat'); ok = false;
+  }
+
+  const amt = parseFloat(document.getElementById('f-amount').value);
+  if (!amt || amt <= 0) {
+    inv('f-amount'); show('e-amt'); ok = false;
+  }
+
+  const dt = document.getElementById('f-date').value;
+  if (!dt) {
+    inv('f-date'); show('e-date'); ok = false;
+  }
+
+  if (!ok) return;
+
+  const payload = {
+    amount:      amt,
+    category:    selCatVal,
+    description: document.getElementById('f-desc').value.trim() || 'No description',
+    date:        dt
+  };
+
+  // ── SEND ──
+  busy = true;
+  const btn = document.getElementById('sub-btn');
+  btn.disabled = true;
+  btn.classList.add('ld');
+
+  try {
+    await apiFetch(API.create(), {
+      method: 'POST',
+      body:   JSON.stringify(payload)
+    });
+
+    toast('Expense added ✓', 'ok');
+    resetForm();
+
+    // Reload with current filter state
+    if (fltCat) {
+      await loadByCat(fltCat);
+    } else {
+      await loadAll();
+    }
+  } catch (e) {
+    toast('Submit failed: ' + e.message, 'bad');
+  } finally {
+    busy = false;
+    btn.disabled = false;
+    btn.classList.remove('ld');
+  }
+}
+
+/* ══════════════════════════════════════
+   FILTER / SORT CONTROLS
+══════════════════════════════════════ */
+function onFilter() {
+  fltCat = document.getElementById('flt-cat').value;
+  if (fltCat) {
+    loadByCat(fltCat);
+  } else {
+    loadAll();
+  }
+}
+
+function toggleSort() {
+  sortDir = sortDir === 'desc' ? 'asc' : 'desc';
+  const btn = document.getElementById('sort-btn');
+  btn.textContent = sortDir === 'desc' ? '↓ Newest' : '↑ Oldest';
+
+  if (fltCat) {
+    // Use the date-sort endpoint when a category is selected
+    const sk = sortDir === 'desc' ? 'date_desc' : 'date_asc';
+    loadByDate(fltCat, sk);
+  } else {
+    // Sort client-side for all records
+    apply();
+  }
+}
+
+/* ══════════════════════════════════════
+   APPLY (sort + render)
+══════════════════════════════════════ */
+function apply() {
+  visible = [...all].sort((a, b) => {
+    const da = new Date(a.date || a.createdAt || 0);
+    const db = new Date(b.date || b.createdAt || 0);
+    return sortDir === 'desc' ? db - da : da - db;
+  });
+  render();
+}
+
+/* ══════════════════════════════════════
+   RENDER
+══════════════════════════════════════ */
+function render() {
+  const tb = document.getElementById('tbody');
+
+  if (!visible.length) {
+    empty(fltCat ? `No ${fltCat} expenses found.` : 'No expenses yet. Add one!');
+    updVisTotals();
+    return;
+  }
+
+  tb.innerHTML = visible.map((e, i) => {
+    const cat  = (e.category || '').toLowerCase();
+    const cls  = cat === 'debit' ? 'd' : cat === 'credit' ? 'c' : '';
+    const amt  = parseFloat(e.amount || 0).toFixed(2);
+    const dt   = fmtDate(e.date || e.createdAt);
+    const desc = esc(e.description || '—');
+
+    return `<tr${i === 0 ? ' class="new"' : ''}>
+      <td class="td-date">${dt}</td>
+      <td><span class="badge ${cls}">${esc(e.category || '—')}</span></td>
+      <td class="td-desc" title="${desc}">${desc}</td>
+      <td class="td-amt ${cls}">₹${amt}</td>
+    </tr>`;
+  }).join('');
+
+  updVisTotals();
+}
+
+function skeleton() {
+  document.getElementById('tbody').innerHTML = Array(5).fill(0).map(() => `
+    <tr class="sk">
+      <td><div style="width:68px"></div></td>
+      <td><div style="width:52px"></div></td>
+      <td><div style="width:110px"></div></td>
+      <td><div style="width:58px"></div></td>
+    </tr>`).join('');
+  document.getElementById('vt-amt').textContent = '—';
+  document.getElementById('vt-cnt').textContent = 'loading…';
+}
+
+function empty(msg) {
+  document.getElementById('tbody').innerHTML = `
+    <tr><td colspan="4">
+      <div class="empty">
+        <div class="empty-icon">📭</div>
+        <div>${esc(msg)}</div>
+      </div>
+    </td></tr>`;
+  updVisTotals();
+}
+
+/* ══════════════════════════════════════
+   STATS
+══════════════════════════════════════ */
+function updateGlobalStats() {
+  const debits  = all.filter(e => (e.category||'').toLowerCase() === 'debit');
+  const credits = all.filter(e => (e.category||'').toLowerCase() === 'credit');
+  const sd = debits.reduce((s,e)  => s + parseFloat(e.amount||0), 0);
+  const sc = credits.reduce((s,e) => s + parseFloat(e.amount||0), 0);
+  document.getElementById('s-debit').textContent  = fmt(sd);
+  document.getElementById('s-dc').textContent     = `${debits.length} entries`;
+  document.getElementById('s-credit').textContent = fmt(sc);
+  document.getElementById('s-cc').textContent     = `${credits.length} entries`;
+}
+
+function updVisTotals() {
+  const total = visible.reduce((s,e) => s + parseFloat(e.amount||0), 0);
+  const fmted = fmt(total);
+  const cnt   = `${visible.length} entr${visible.length === 1 ? 'y' : 'ies'}`;
+  document.getElementById('vt-amt').textContent  = fmted;
+  document.getElementById('vt-cnt').textContent  = cnt;
+  document.getElementById('s-total').textContent = fmted;
+  document.getElementById('s-count').textContent = cnt;
+}
+
+/* ══════════════════════════════════════
+   FORM HELPERS
+══════════════════════════════════════ */
+function selCat(cat) {
+  selCatVal = cat;
+  document.getElementById('tb-d').className = 'cat-tab' + (cat === 'Debit'  ? ' sel-d' : '');
+  document.getElementById('tb-c').className = 'cat-tab' + (cat === 'Credit' ? ' sel-c' : '');
+  document.getElementById('e-cat').classList.remove('on');
+}
+function clrErr(inputId, errId) {
+  document.getElementById(inputId).classList.remove('inv');
+  document.getElementById(errId).classList.remove('on');
+}
+function inv(id)  { document.getElementById(id).classList.add('inv'); }
+function show(id) { document.getElementById(id).classList.add('on'); }
+
+function resetForm() {
+  selCatVal = '';
+  document.getElementById('tb-d').className = 'cat-tab';
+  document.getElementById('tb-c').className = 'cat-tab';
+  document.getElementById('f-amount').value = '';
+  document.getElementById('f-desc').value   = '';
+  document.getElementById('f-date').value   = today();
+  ['f-amount','f-date'].forEach(id => document.getElementById(id).classList.remove('inv'));
+  ['e-cat','e-amt','e-date'].forEach(id => document.getElementById(id).classList.remove('on'));
+}
+
+/* ══════════════════════════════════════
+   UI HELPERS
+══════════════════════════════════════ */
+function setStatus(s) {
+  const dot = document.getElementById('api-dot');
+  const txt = document.getElementById('api-txt');
+  if (s === 'ok')      { dot.className = 'api-dot ok';  txt.textContent = 'api connected'; }
+  else if (s === 'err'){ dot.className = 'api-dot err'; txt.textContent = 'api error'; }
+  else                 { dot.className = 'api-dot';     txt.textContent = 'connecting…'; }
+}
+
+function setRefSpin(on) {
+  document.getElementById('ref-btn').classList.toggle('spin', on);
+}
+
+let _tt;
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'on' + (type ? ' ' + type : '');
+  clearTimeout(_tt);
+  _tt = setTimeout(() => { el.className = ''; }, 3400);
+}
+
+function fmt(n) {
+  return '₹' + Number(n).toLocaleString('en-IN', {
+    minimumFractionDigits: 2, maximumFractionDigits: 2
+  });
+}
+
+function fmtDate(str) {
+  if (!str) return '—';
+  const d = new Date(str);
+  if (isNaN(d)) return str;
+  return d.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+}
+
+function today() {
+  return new Date().toISOString().split('T')[0];
+}
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
